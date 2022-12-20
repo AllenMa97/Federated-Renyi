@@ -11,7 +11,6 @@ from data.dataset import get_ADULT_dataset, get_COMPAS_dataset, get_DRUG_dataset
 from data.dataloader import get_FL_dataloader
 from tool.utils import get_specific_time, get_parameters, set_parameters
 from tool.logger import *
-from algorithm.FederatedRenyi import Fed_Renyi
 from algorithm.FederatedAverage import Fed_AVG_NN, Fed_AVG_LR
 
 
