@@ -1,5 +1,5 @@
 {
-  "batch_size": 128,
+  "batch_size": 65536,
   "FL_fraction": 0.2,
   "CUDA": false,
 
