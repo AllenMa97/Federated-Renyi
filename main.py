@@ -1,9 +1,8 @@
 import os
 
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 import torch
-import datetime
 import numpy as np
 import json
 import pickle
@@ -352,8 +351,11 @@ def main(dataset_name, hypothesis, algorithm):
     with open("./" + dataset_name + ".json", "r") as f:
         temp_dict = json.load(f)
     param_dict.update(**temp_dict)
-    #param_dict['device'] = "cuda" if torch.cuda.is_available() else "cpu"  # Get cpu or gpu device for experiment
-    param_dict['device'] = "cpu"
+    
+    if param_dict["CUDA"]:
+        param_dict['device'] = "cuda" if torch.cuda.is_available() else "cpu"  # Get cpu or gpu device for experiment
+    else:
+        param_dict['device'] = "cpu"
     Experiment_NO = 1
     lamda_list = [500, 100, 75, 50, 25, 10, 1, 0.01, 0]
     FL_drop_rate_list = [0, 0.1, 0.2, 0.3, 0.4, 0.5]
@@ -380,8 +382,6 @@ def main(dataset_name, hypothesis, algorithm):
                 # Create the log
                 LOG_PATH = "./log_path/" + param_dict['dataset_name'] + "/" + param_dict['algorithm'] + "/" \
                            + param_dict['hypothesis'] + "/"
-                # nowTime = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-                # log_path = os.path.join(LOG_PATH, "train" + nowTime )
                 log_path = os.path.join(LOG_PATH, str(Experiment_NO))
                 file_handler = logging.FileHandler(log_path+".txt")
                 file_handler.setFormatter(formatter)
@@ -410,10 +410,5 @@ def main(dataset_name, hypothesis, algorithm):
 
 
 if __name__ == '__main__':
-    # print(sys.argv[1])
-    # print(sys.argv[2])
-    # print(sys.argv[3])
-
     main(sys.argv[1], sys.argv[2], sys.argv[3])
-    # main(sys.argv[1], sys.argv[2], "FederatedFair")
     # main("COMPAS", "LR", "FederatedFair")
