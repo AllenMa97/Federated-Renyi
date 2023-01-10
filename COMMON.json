@@ -1,0 +1,21 @@
+{
+  "batch_size": 128,
+  "FL_fraction": 0.2,
+  "CUDA": false,
+
+  "_common": "Whether to make the validation process",
+  "need_validation": false,
+
+  "_common": "Whether to mask the sensitive attribute s1",
+  "mask_s1_flag": false,
+
+  "_common": "Whether to mask the sensitive attribute s2",
+  "mask_s2_flag": false,
+
+  "_common": "Whether to mask the sensitive attribute s1 & s2",
+  "mask_s1_s2_flag": false,
+
+  "_common": "Copy From Renyi",
+  "local_step_size": 0.01
+
+}
