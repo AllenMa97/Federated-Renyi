@@ -1,4 +1,5 @@
 import os
+import sys
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
@@ -16,6 +17,7 @@ from tool.logger import *
 from algorithm.FederatedRenyi import Fed_Renyi_NN, Fed_Renyi_LR
 from algorithm.FederatedAverage import Fed_AVG_NN, Fed_AVG_LR
 from algorithm.FederatedFair import Fed_Fair_NN, Fed_Fair_LR
+from algorithm.LCO import LCO_LR, LCO_NN
 
 
 def Experiment_Create_dataset(param_dict, no_pickle=False):
@@ -73,18 +75,18 @@ def Experiment_Create_dataset(param_dict, no_pickle=False):
 
 
 def Experiment_Create_dataloader(param_dict, training_dataset, testing_dataset):
-    num_clients_m = param_dict['num_clients_m']
+    num_clients_K = param_dict['num_clients_K']
     batch_size = param_dict['batch_size']
     need_validation = param_dict['need_validation']
 
     training_dataloaders, validation_dataloaders, client_dataset_list = get_FL_dataloader(
-        training_dataset, num_clients_m, split_strategy="Uniform",
+        training_dataset, num_clients_K, split_strategy="Uniform",
         do_train=True, need_validation=need_validation, batch_size=batch_size,
         num_workers=0, do_shuffle=True
     )
 
     testing_dataloader = get_FL_dataloader(
-        testing_dataset, num_clients_m, split_strategy="Uniform",
+        testing_dataset, num_clients_K, split_strategy="Uniform",
         do_train=False, batch_size=batch_size, num_workers=0
     )
     return training_dataloaders, validation_dataloaders, client_dataset_list, testing_dataloader
@@ -113,7 +115,7 @@ def Experiment_Federated_Average(param_dict, global_model, training_dataloaders,
             device,
             global_model,
             param_dict['algorithm_epoch_T'],
-            param_dict['num_clients_m'],
+            param_dict['num_clients_K'],
             param_dict['communication_round_I'],
             param_dict['FL_fraction'],
             param_dict['FL_drop_rate'],
@@ -129,7 +131,7 @@ def Experiment_Federated_Average(param_dict, global_model, training_dataloaders,
             device,
             global_model,
             param_dict['algorithm_epoch_T'],
-            param_dict['num_clients_m'],
+            param_dict['num_clients_K'],
             param_dict['communication_round_I'],
             param_dict['FL_fraction'],
             param_dict['FL_drop_rate'],
@@ -147,6 +149,7 @@ def Experiment_Federated_Average(param_dict, global_model, training_dataloaders,
 def Experiment_Federated_Renyi(param_dict, global_model, training_dataloaders, training_dataset, client_dataset_list,
                                testing_dataloader):
     device = param_dict['device']
+    γ_k_style = param_dict['γ_k_style']
 
     if param_dict['hypothesis'] == "LR":
         updated_global_model = Fed_Renyi_LR(
@@ -155,14 +158,15 @@ def Experiment_Federated_Renyi(param_dict, global_model, training_dataloaders, t
             param_dict['lamda'],
             global_model,
             param_dict['algorithm_epoch_T'],
-            param_dict['num_clients_m'],
+            param_dict['num_clients_K'],
             param_dict['communication_round_I'],
             param_dict['FL_fraction'],
             param_dict['FL_drop_rate'],
             param_dict['local_step_size'],
             training_dataloaders,
             training_dataset,
-            client_dataset_list
+            client_dataset_list,
+            γ_k_style
         )
         logger.info("-----------------------------------------------------------------------------")
 
@@ -173,14 +177,15 @@ def Experiment_Federated_Renyi(param_dict, global_model, training_dataloaders, t
             param_dict['lamda'],
             global_model,
             param_dict['algorithm_epoch_T'],
-            param_dict['num_clients_m'],
+            param_dict['num_clients_K'],
             param_dict['communication_round_I'],
             param_dict['FL_fraction'],
             param_dict['FL_drop_rate'],
             param_dict['local_step_size'],
             training_dataloaders,
             training_dataset,
-            client_dataset_list
+            client_dataset_list,
+            γ_k_style
         )
         logger.info("-----------------------------------------------------------------------------")
 
@@ -210,7 +215,7 @@ def Experiment_Federated_Fair(param_dict, global_model, training_dataloaders, tr
         updated_global_model = Fed_Fair_LR(
             device,
             global_model,
-            param_dict['algorithm_epoch_T'], param_dict['num_clients_m'],
+            param_dict['algorithm_epoch_T'], param_dict['num_clients_K'],
             training_dataloaders,
             training_dataset,
             client_dataset_list,
@@ -222,7 +227,52 @@ def Experiment_Federated_Fair(param_dict, global_model, training_dataloaders, tr
         updated_global_model = Fed_Fair_NN(
             device,
             global_model,
-            param_dict['algorithm_epoch_T'], param_dict['num_clients_m'],
+            param_dict['algorithm_epoch_T'], param_dict['num_clients_K'],
+            training_dataloaders,
+            training_dataset,
+            client_dataset_list,
+            ϵ
+        )
+        logger.info("-----------------------------------------------------------------------------")
+
+    # Model testing
+    Experiment_Model_testing(device, testing_dataloader, param_dict['mask_s1_flag'], updated_global_model, hypothesis)
+
+
+def Experiment_LCO(param_dict, global_model, training_dataloaders, training_dataset, client_dataset_list,
+                              testing_dataloader):
+    device = param_dict['device']
+    hypothesis = param_dict['hypothesis']
+
+    if "ADULT" in param_dict['dataset_name']:
+        ϵ = 0.8
+    elif "COMPAS" in param_dict['dataset_name']:
+        if "LR" in param_dict['hypothesis']:
+            ϵ = 0.48
+        else:
+            ϵ = 0.60
+    else:
+        if "LR" in param_dict['hypothesis']:
+            ϵ = 0.40
+        else:
+            ϵ = 0.45
+    if param_dict['hypothesis'] == "LR":
+        updated_global_model = LCO_LR(
+            device,
+            global_model,
+            param_dict['algorithm_epoch_T'], param_dict['num_clients_K'],
+            training_dataloaders,
+            training_dataset,
+            client_dataset_list,
+            ϵ
+        )
+        logger.info("-----------------------------------------------------------------------------")
+
+    else:
+        updated_global_model = LCO_NN(
+            device,
+            global_model,
+            param_dict['algorithm_epoch_T'], param_dict['num_clients_K'],
             training_dataloaders,
             training_dataset,
             client_dataset_list,
@@ -319,7 +369,7 @@ def Experiment(param_dict):
         logger.info("#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥")
         logger.info("#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥")
 
-    if "FederatedRenyi" in param_dict["algorithm"]:
+    if ("FederatedRenyi" in param_dict["algorithm"]) or ("Renyi" in param_dict["algorithm"]):
         # Federated Renyi
         logger.info("~~~~~~ Algorithm: Federated Renyi ~~~~~~")
         Experiment_Federated_Renyi(
@@ -341,7 +391,18 @@ def Experiment(param_dict):
         logger.info("#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥")
         logger.info("#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥")
 
-def main(dataset_name, hypothesis, algorithm):
+    if "LCO" in param_dict["algorithm"]:
+        # Federated Fair
+        logger.info("~~~~~~ Algorithm: LCO ~~~~~~")
+        Experiment_LCO(
+            param_dict, global_model, training_dataloaders, training_dataset, client_dataset_list, testing_dataloader
+        )
+
+        logger.info("#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥")
+        logger.info("#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥")
+        logger.info("#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥#￥")
+
+def main(dataset_name, hypothesis, algorithm, γ_k_style, device):
     ################################################################################################
     # Hyper-params
     param_dict = {}
@@ -351,23 +412,25 @@ def main(dataset_name, hypothesis, algorithm):
     with open("./" + dataset_name + ".json", "r") as f:
         temp_dict = json.load(f)
     param_dict.update(**temp_dict)
-    
-    if param_dict["CUDA"]:
+
+    param_dict['γ_k_style'] = γ_k_style
+
+    if "gpu" in device:
         param_dict['device'] = "cuda" if torch.cuda.is_available() else "cpu"  # Get cpu or gpu device for experiment
     else:
         param_dict['device'] = "cpu"
+
     Experiment_NO = 1
-    lamda_list = [500, 100, 75, 50, 25, 10, 1, 0.01, 0]
+    lamda_list = [500, 100, 75, 50, 25, 10, 1, 0.01]
     FL_drop_rate_list = [0, 0.1, 0.2, 0.3, 0.4, 0.5]
-    algorithm_epoch_T_communication_round_I_list = [(10, 3), (30, 10), (50, 15), (100, 20)]
-    # hypothesis_list = ["NN", "LR"]
-    # algorithm_list = ["FederatedRenyi", "FederatedAverage"]
+    epoch_T_communication_I_list = [(10, 3), (30, 10), (50, 15), (100, 20)]
 
     param_dict['dataset_name'] = dataset_name
     param_dict['algorithm'] = algorithm
     param_dict['hypothesis'] = hypothesis
 
     # Skipping the unnecessary loop
+    # 留下Future，uniform_client还没测试多个Lamda
     if "FederatedRenyi" not in algorithm:
         lamda_list = [0]
 
@@ -375,20 +438,19 @@ def main(dataset_name, hypothesis, algorithm):
         param_dict['lamda'] = lamda
         for FL_drop_rate in FL_drop_rate_list:
             param_dict['FL_drop_rate'] = FL_drop_rate
-            for algorithm_epoch_T, communication_round_I in algorithm_epoch_T_communication_round_I_list:
+            for algorithm_epoch_T, communication_round_I in epoch_T_communication_I_list:
                 param_dict['algorithm_epoch_T'] = algorithm_epoch_T
                 param_dict['communication_round_I'] = communication_round_I
                 ################################################################################################
                 # Create the log
-                LOG_PATH = "./log_path/" + param_dict['dataset_name'] + "/" + param_dict['algorithm'] + "/" \
-                           + param_dict['hypothesis'] + "/"
+                LOG_PATH = "./log_path/" + param_dict['dataset_name'] + "/" + param_dict['algorithm'] + "/" + param_dict['hypothesis'] + "/"
                 log_path = os.path.join(LOG_PATH, str(Experiment_NO))
                 file_handler = logging.FileHandler(log_path+".txt")
                 file_handler.setFormatter(formatter)
                 logger.addHandler(file_handler)
                 ################################################################################################
-                logger.info(
-                    f"Experiment {Experiment_NO}/{len(lamda_list) * len(FL_drop_rate_list) * len(algorithm_epoch_T_communication_round_I_list)} setup finish")
+                total_Experiment_NO = len(lamda_list) * len(FL_drop_rate_list) * len(epoch_T_communication_I_list)
+                logger.info(f"Experiment {Experiment_NO}/{total_Experiment_NO} setup finish")
                 json_str = json.dumps(param_dict, indent=4)
                 with open(log_path + "_Parameter.json", "w") as json_file:
                     json_file.write(json_str)
@@ -402,13 +464,11 @@ def main(dataset_name, hypothesis, algorithm):
                 ################################################################################################
                 Experiment(param_dict)
                 Experiment_NO += 1
+                logger.removeHandler(file_handler)
                 logger.info("|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||")
                 logger.info("|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||")
-                logger.info("")
-                logger.info("")
-                logger.info("")
 
 
 if __name__ == '__main__':
-    main(sys.argv[1], sys.argv[2], sys.argv[3])
-    # main("COMPAS", "LR", "FederatedFair")
+    main(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5])
+
